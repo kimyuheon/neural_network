@@ -17,7 +17,7 @@ int main()
 		for (int g = 1; g <= 255; g+=10) {
 			for (int b = 2; b <= 255; b+=10) {
 				int input = 0.63*r + 0.58*g + 0.11*b;
-				if(outputs[input].size() <= 5 && input <= 255){
+				if(input <= 255 && outputs[input].size() <= 5){
 					outputs[input].push_back({r,g,b});
 				}
 				

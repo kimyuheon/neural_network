@@ -1,6 +1,8 @@
 #include <vector>
 #include <iostream>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 typedef vector<int> arr1d;
@@ -39,15 +41,59 @@ Neuron::Neuron(unsigned numOutput, unsigned myIndex)
 class GetData
 {
     public:
-        GetData();
+        GetData(const string filename);
         void getTopology(vector<int> &topology, int &argc, char** argv);
+        int getNextInputs(vector<int> &inputVals);
+        int getTargetOutputs(vector<int> &targetOutputVals);
+        bool isEof(void) { return dataFile.eof(); }
+    private:
+        ifstream dataFile;
 };
 void GetData::getTopology(vector<int> &topology, int &argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         topology.push_back(atoi(argv[i]));
     }
 }
-GetData::GetData(){}
+GetData::GetData(const string filename){
+    dataFile.open(filename.c_str());
+
+}
+int GetData::getNextInputs(vector<int> &inputVals) {
+    inputVals.clear();
+
+    string line;
+    getline(dataFile, line);
+    stringstream ss(line);
+
+    string label;
+    ss >> label;
+    if (label.compare("in:") == 0) {
+        double oneValue;
+        while (ss >> oneValue)
+        {
+            inputVals.push_back(oneValue);
+        }
+    }
+    return inputVals.size();
+}
+int GetData::getTargetOutputs(vector<int> &targetOutputVals) {
+    targetOutputVals.clear();
+
+    string line;
+    getline(dataFile, line);
+    stringstream ss(line);
+
+    string label;
+    ss >> label;
+    if (label.compare("out:") == 0) {
+        double oneValue;
+        while (ss >> oneValue)
+        {
+            targetOutputVals.push_back(oneValue);
+        }
+    }
+    return targetOutputVals.size();
+}
 
 class Net
 {
@@ -73,8 +119,12 @@ Net::Net(const vector<int> &topology)
 }
 
 int main(int argc, char** argv) {
-    GetData getdata;
+    GetData getdata("out.txt");
     vector<int> topology;
     getdata.getTopology(topology, argc, argv);
     Net myNet(topology);
+
+    while(!getdata.isEof()) {
+        
+    }
 }
