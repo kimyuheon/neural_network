@@ -1,0 +1,32 @@
+지금 강의 (C++ NN 기초)
+│
+├─ Neuron, Layer, Net 구조 이해 ✅
+├─ feedforward, backprop 이해 ✅
+│
+▼
+가중치 저장/로드 추가 (직접 구현)
+│
+├─ binary 파일로 저장
+├─ 불러와서 학습 재개
+│   ← 이게 GGUF의 핵심 원리
+│
+▼
+Pranav 강의 (PyTorch + C++ Libtorch)
+│
+├─ 더 큰 모델 다루기
+├─ 모델 export 방법
+│
+▼
+Zero to Hero (Transformer 이론)
+│
+├─ Attention 메커니즘 이해
+├─ GPT 구조 이해
+│
+▼
+llama.cpp 소스 분석
+│
+├─ GGUF 포맷 직접 확인
+├─ 양자화 이해
+│
+▼
+GGUF 변환 → CppAI 탑재 🎯
