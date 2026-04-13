@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <cassert>
 
 using namespace std;
 typedef vector<int> arr1d;
@@ -23,7 +24,10 @@ class Neuron
     public:
         Neuron(unsigned numOutputs, unsigned myIndex);
         void setOutputVal(double val) { m_outputVal = val; }
+        double getOutputVal() { return m_outputVal; }
         static double randomWeight(void) { return rand() / double(RAND_MAX); }
+        void feedForward(Layer& preLayer);
+        double transferFunction(double x);
     private:
         double m_outputVal;
         vector<Connection> m_outputWeights;
@@ -37,13 +41,23 @@ Neuron::Neuron(unsigned numOutput, unsigned myIndex)
     }
     m_myIndex = myIndex;
 }
+double Neuron::transferFunction(double x) {
+    return tanh(x);
+}
+void Neuron::feedForward(Layer& preLayer) {
+    double sum = 0.0;
+    for (int n = 0; n < preLayer.size(); ++n) {
+        sum += preLayer[n].getOutputVal() * preLayer[n].m_outputWeights[m_myIndex].weight;
+    }
+    m_outputVal = Neuron::transferFunction(sum);
+}
 
 class GetData
 {
     public:
         GetData(const string filename);
         void getTopology(vector<int> &topology, int &argc, char** argv);
-        int getNextInputs(vector<int> &inputVals);
+        int getNextInputs(vector<double> &inputVals);
         int getTargetOutputs(vector<int> &targetOutputVals);
         bool isEof(void) { return dataFile.eof(); }
     private:
@@ -58,7 +72,7 @@ GetData::GetData(const string filename){
     dataFile.open(filename.c_str());
 
 }
-int GetData::getNextInputs(vector<int> &inputVals) {
+int GetData::getNextInputs(vector<double> &inputVals) {
     inputVals.clear();
 
     string line;
@@ -99,6 +113,7 @@ class Net
 {
     public:
         Net(const vector<int> &topology);
+        void feedForward(const vector<double> &inputVals);
     private:
         vector<Layer> m_layer;
 };
@@ -118,13 +133,32 @@ Net::Net(const vector<int> &topology)
     }
 }
 
+void Net::feedForward(const vector<double> &inputVals) {
+    assert(inputVals.size() == m_layer[0].size() - 1);
+    for (int i = 0; i < inputVals.size(); i++) {
+        m_layer[0][i].setOutputVal(inputVals[i]);
+    }
+    for (int layerNum = 1; layerNum < m_layer.size(); ++layerNum) {
+        Layer &preLayer = m_layer[layerNum - 1];
+        for (int neurons = 0; neurons< m_layer[layerNum].size() - 1; ++neurons) {
+            m_layer[layerNum][neurons].feedForward(preLayer);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     GetData getdata("out.txt");
     vector<int> topology;
     getdata.getTopology(topology, argc, argv);
     Net myNet(topology);
-
+    vector<double> inputVals, tagetVals, resultVals;
+    int count = 0;
     while(!getdata.isEof()) {
-        
+        count++;
+        cout << "feeding input No: " << count << " to our neural network" << endl;
+        if (getdata.getNextInputs(inputVals) != topology[0])
+            break;
+
+        myNet.feedForward(inputVals);
     }
 }
