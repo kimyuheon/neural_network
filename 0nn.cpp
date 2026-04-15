@@ -26,13 +26,24 @@ class Neuron
         void setOutputVal(double val) { m_outputVal = val; }
         double getOutputVal() { return m_outputVal; }
         static double randomWeight(void) { return rand() / double(RAND_MAX); }
+        double transferFunctionDerivative(double x);
+        void calOutputGradients(double targetCals);
+        void calcHiddenGradients(Layer &nextLayer);
+        void updateInputWeights(Layer &prevLayer);
+        double sumDOW(Layer &nextLayer);
         void feedForward(Layer& preLayer);
         double transferFunction(double x);
+        double getWeight(double x);
     private:
+        static double eta;
+        static double alpha;
         double m_outputVal;
         vector<Connection> m_outputWeights;
         unsigned m_myIndex;
+        double m_gradient;
 };
+double Neuron::eta = 0.15;
+double Neuron::alpha = 0.5;
 Neuron::Neuron(unsigned numOutput, unsigned myIndex)
 {
     for (unsigned c = 0; c < numOutput; ++c) {
@@ -52,13 +63,51 @@ void Neuron::feedForward(Layer& preLayer) {
     m_outputVal = Neuron::transferFunction(sum);
 }
 
+double Neuron::transferFunctionDerivative(double x) {
+    return 1.0 - x * x;
+}
+
+void Neuron::calOutputGradients(double targetVal) {
+    double delta = targetVal - m_outputVal;
+    m_gradient = delta * transferFunctionDerivative(m_outputVal);
+}
+
+double Neuron::sumDOW(Layer &nextLayer)
+{
+    double sum = 0;
+    for (int n = 0; n < nextLayer.size() - 1; n++) {
+        sum += m_outputWeights[n].weight * nextLayer[n].m_gradient;
+    }
+    return sum;
+}
+
+void Neuron::calcHiddenGradients(Layer &nextLayer) {
+    double dow = sumDOW(nextLayer);
+    m_gradient = dow * transferFunctionDerivative(m_outputVal);
+}
+
+void Neuron::updateInputWeights(Layer &prevLayer) {
+    for (int n = 0; n < prevLayer.size(); n++) {
+        Neuron &neuron = prevLayer[n];
+        double oldDeltaWeight = neuron.m_outputWeights[m_myIndex].deltaWeight;
+        double newDeltaWeight =  
+            eta * neuron.getOutputVal() * m_gradient * alpha * oldDeltaWeight;
+        neuron.m_outputWeights[m_myIndex].deltaWeight = newDeltaWeight;
+        neuron.m_outputWeights[m_myIndex].weight = newDeltaWeight;
+    }
+}
+
+double Neuron::getWeight(double x) {
+    return m_outputWeights[x].weight;
+}
+
 class GetData
 {
     public:
         GetData(const string filename);
         void getTopology(vector<int> &topology, int &argc, char** argv);
         int getNextInputs(vector<double> &inputVals);
-        int getTargetOutputs(vector<int> &targetOutputVals);
+        int getTargetOutputs(vector<double> &targetOutputVals);
         bool isEof(void) { return dataFile.eof(); }
     private:
         ifstream dataFile;
@@ -90,7 +139,7 @@ int GetData::getNextInputs(vector<double> &inputVals) {
     }
     return inputVals.size();
 }
-int GetData::getTargetOutputs(vector<int> &targetOutputVals) {
+int GetData::getTargetOutputs(vector<double> &targetOutputVals) {
     targetOutputVals.clear();
 
     string line;
@@ -114,8 +163,14 @@ class Net
     public:
         Net(const vector<int> &topology);
         void feedForward(const vector<double> &inputVals);
+        void getResults(vector<double> &resultVals);
+        void backProp(vector<double> &targetVals);
+
     private:
         vector<Layer> m_layer;
+        double m_error;
+        double m_recentAverageError;
+        double m_recentAverageSmoothingFactor = 100;
 };
 
 Net::Net(const vector<int> &topology) 
@@ -146,6 +201,43 @@ void Net::feedForward(const vector<double> &inputVals) {
     }
 }
 
+void Net::getResults(vector<double> &resultVals) {
+    resultVals.clear();
+    for(int n = 0; n < m_layer.back().size() - 1; n++) {
+        resultVals.push_back(m_layer.back()[n].getOutputVal());
+    }
+}
+
+void Net::backProp(vector<double> &targetVals) {
+    Layer &outputLayer = m_layer.back();
+    m_error = 0.0;
+    for(int n = 0; n < outputLayer.size() - 1; n++) {
+        double delta = targetVals[n] - outputLayer[n].getOutputVal();
+        m_error += delta * delta;
+    }
+    m_error /= outputLayer.size() - 1;
+    m_error = sqrt(m_error);
+    m_recentAverageError = (m_recentAverageError * m_recentAverageSmoothingFactor + m_error) / 
+                           (m_recentAverageSmoothingFactor + 1.0);
+    for(int n = 0; n < outputLayer.size()-1; n++) {
+        outputLayer[n].calOutputGradients(targetVals[n]);
+    }
+    for(int layerNum = 0; m_layer.size() - 2; layerNum++) {
+        Layer &hiddenLayer = m_layer[layerNum];
+        Layer &nextLayer = m_layer[layerNum - 1];
+        for(int n = 0; hiddenLayer.size(); n++) {
+            hiddenLayer[n].calcHiddenGradients(nextLayer);
+        }
+    }
+}
+
+void showVecotrVals(string label, vector<double> &v) {
+    cout << label << " ";
+    for (int i = 0; i < v.size(); i++) {
+        cout << v[i] << " ";
+    } cout << endl;
+}
+
 int main(int argc, char** argv) {
     GetData getdata("out.txt");
     vector<int> topology;
@@ -158,7 +250,14 @@ int main(int argc, char** argv) {
         cout << "feeding input No: " << count << " to our neural network" << endl;
         if (getdata.getNextInputs(inputVals) != topology[0])
             break;
-
+        assert(inputVals.size() == topology[0]);
+        showVecotrVals("inputs : ", inputVals);
         myNet.feedForward(inputVals);
+        myNet.getResults(resultVals);
+        showVecotrVals("outputs : ", resultVals);
+        getdata.getTargetOutputs(tagetVals);
+        showVecotrVals("target : ", tagetVals);
+        assert(tagetVals.size() == topology.back());
+        myNet.backProp(tagetVals);
     }
 }
