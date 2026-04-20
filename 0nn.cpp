@@ -91,9 +91,9 @@ void Neuron::updateInputWeights(Layer &prevLayer) {
         Neuron &neuron = prevLayer[n];
         double oldDeltaWeight = neuron.m_outputWeights[m_myIndex].deltaWeight;
         double newDeltaWeight =  
-            eta * neuron.getOutputVal() * m_gradient * alpha * oldDeltaWeight;
+            eta * neuron.getOutputVal() * m_gradient + alpha * oldDeltaWeight;
         neuron.m_outputWeights[m_myIndex].deltaWeight = newDeltaWeight;
-        neuron.m_outputWeights[m_myIndex].weight = newDeltaWeight;
+        neuron.m_outputWeights[m_myIndex].weight += newDeltaWeight;
     }
 }
 
@@ -165,11 +165,13 @@ class Net
         void feedForward(const vector<double> &inputVals);
         void getResults(vector<double> &resultVals);
         void backProp(vector<double> &targetVals);
+        void printWeight();
+        double getRecentAverageError(void) const { return m_recentAverageError; } 
 
     private:
         vector<Layer> m_layer;
-        double m_error;
-        double m_recentAverageError;
+        double m_error = 0.0;
+        double m_recentAverageError = 0.0;
         double m_recentAverageSmoothingFactor = 100;
 };
 
@@ -222,16 +224,38 @@ void Net::backProp(vector<double> &targetVals) {
     for(int n = 0; n < outputLayer.size()-1; n++) {
         outputLayer[n].calOutputGradients(targetVals[n]);
     }
-    for(int layerNum = 0; m_layer.size() - 2; layerNum++) {
+    for(int layerNum = m_layer.size() - 2; layerNum > 0; layerNum--) {
         Layer &hiddenLayer = m_layer[layerNum];
-        Layer &nextLayer = m_layer[layerNum - 1];
-        for(int n = 0; hiddenLayer.size(); n++) {
+        Layer &nextLayer = m_layer[layerNum + 1];
+        for(int n = 0; n < hiddenLayer.size(); n++) {
             hiddenLayer[n].calcHiddenGradients(nextLayer);
+        }
+    }
+    for(int layerNum = m_layer.size() - 1; layerNum > 0; layerNum--) {
+        Layer &layer = m_layer[layerNum];
+        Layer &prevLayer = m_layer[layerNum - 1];
+        for(int n = 0; n < layer.size() - 1; n++) {
+            layer[n].updateInputWeights(prevLayer);
         }
     }
 }
 
-void showVecotrVals(string label, vector<double> &v) {
+void Net::printWeight() {
+    for (int x= 0; x < m_layer.size() - 1; x++) {
+        cout << endl;
+        cout << "layer" << x << ":" << endl;
+        cout << "-----------" << endl;
+        for (int y = 0; y < m_layer[x].size(); y++) {
+            cout << "Neuron " << y << ":= ";
+            for (int z = 0; z < m_layer[x + 1].size() - 1; z++) {
+                cout << m_layer[x][y].getWeight(z) << ",";
+            }
+            cout << endl;
+         }
+    }
+}
+
+void showVectorVals(string label, vector<double> &v) {
     cout << label << " ";
     for (int i = 0; i < v.size(); i++) {
         cout << v[i] << " ";
@@ -245,19 +269,49 @@ int main(int argc, char** argv) {
     Net myNet(topology);
     vector<double> inputVals, tagetVals, resultVals;
     int count = 0;
+    const double NORM = 255.0;
     while(!getdata.isEof()) {
         count++;
         cout << "feeding input No: " << count << " to our neural network" << endl;
         if (getdata.getNextInputs(inputVals) != topology[0])
             break;
         assert(inputVals.size() == topology[0]);
-        showVecotrVals("inputs : ", inputVals);
+        showVectorVals("inputs : ", inputVals);
+
+        for (int i = 0; i < inputVals.size(); i++) inputVals[i] /= NORM;
+
         myNet.feedForward(inputVals);
         myNet.getResults(resultVals);
-        showVecotrVals("outputs : ", resultVals);
+
+        vector<double> displayResults = resultVals;
+        for (int i = 0; i < displayResults.size(); i++) displayResults[i] *= NORM;
+        showVectorVals("outputs : ", displayResults);
+
         getdata.getTargetOutputs(tagetVals);
-        showVecotrVals("target : ", tagetVals);
+        showVectorVals("target : ", tagetVals);
         assert(tagetVals.size() == topology.back());
+
+        for (int i = 0; i < tagetVals.size(); i++) tagetVals[i] /= NORM;
+
         myNet.backProp(tagetVals);
+        cout<<"Net recent average error: "<< myNet.getRecentAverageError() << endl;
     }
+
+    myNet.printWeight();
+    cout << endl << "Done "<< endl;
+    cout << "lets carryout a test" << endl;
+
+    // int input = 0.63*r + 0.58*g + 0.11*b;
+    inputVals.clear();
+    inputVals.push_back(100.0 / NORM);
+    inputVals.push_back(120.0 / NORM);
+    inputVals.push_back(140.0 / NORM);
+    double targetValue = 0.63*100 + 0.58*120 + 0.11 * 140;
+    showVectorVals("inputs (normalized): ", inputVals);
+    myNet.feedForward(inputVals);
+    myNet.getResults(resultVals);
+
+    double denormalized = resultVals[0] * NORM;
+    cout << "Our expected output is " << targetValue << ", while our result is "
+         << denormalized << endl;
 }
